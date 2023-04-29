@@ -1,106 +1,100 @@
 // Import required modules
-import mysql from "mysql";
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
 import * as dotenv from "dotenv";
+import { Sequelize } from "sequelize";
+
 dotenv.config();
-const connection = mysql.createConnection({
-    host: process.env.SQL_HOST,
-    user: process.env.SQL_USERNAME,
-    password: process.env.SQL_PASSWORD,
-    database: process.env.SQL_DATABASE,
-    port: 1433,
-    authentication: {
-        type: "default",
+
+const sampleDb = new Sequelize(
+    process.env.SQL_DATABASE,
+    process.env.SQL_USERNAME,
+    process.env.SQL_PASSWORD,
+    {
+        dialect: "mssql",
+        host: process.env.SQL_HOST,
+        port: 1433, // Default port
+        logging: false, // disable logging; default: console.log
+        dialectOptions: {
+            requestTimeout: 30000, // timeout = 30 seconds
+        },
     },
-    options: {
-        encrypt: true,
+);
+
+const User = sampleDb.define("users", {
+    id: {
+        type: Sequelize.INTEGER,
+        autoIncrement: true,
+        primaryKey: true,
+        allowNull: false,
+    },
+    username: {
+        type: Sequelize.STRING,
+        allowNull: false,
+    },
+    password: {
+        type: Sequelize.STRING,
+        allowNull: false,
+    },
+    age: {
+        type: Sequelize.INTEGER,
+    },
+    email: {
+        type: Sequelize.STRING,
     },
 });
 
-connection.query('SELECT 1 + 1 as solution',
-function (error, results, fields) {
-    try {
-        console.log("results", results)
-        console.log("err", error)
-    } catch (err) {
-        console.log("error", error)
-    }
-})
+const app = express();
 
-console.log(process.env) // hiding variable
-// create express instance
-// const app = express();
+// enable cors for client
+const corsOption = {
+    origin: ["http://localhost:3000"],
+};
+app.use(cors(corsOption));
 
-// // enable cors for client
-// const corsOption = {
-//     origin: ["http://localhost:3000"],
-// };
-// app.use(cors(corsOption));
+// Middleware
+app.use(bodyParser.json());
+app.use(express.json());
 
-// // Middleware
-// app.use(bodyParser.json());
 
-// // Datastore
-// let users = [
-//     { id: 1, name: "John Doe", email: "john.doe@example.com" },
-//     { id: 2, name: "Jane Smith", email: "jane.smith@example.com" },
-// ];
+// post new user 
+app.post("/newUser", async function (req, res) {
+    sampleDb.sync({ force: true }).then(async function () {
+        let { username, password } = req.body;
+        // Create demo: Create a User instance and save it to the database
+        let newUser = await User.create({ username, password });
+        // insert into users (username, password) values ('ori', '123')
+        // console.log("newUser:", newUser)
+        res.send(newUser.dataValues);
+    });
+});
 
-// // Routes
-// // GET all users
-// app.get("/users", (req, res) => {
-//     res.send(users);
-// });
-// app.get("/message", (req, res) => {
-//     res.json({ message: "Hello from server!" });
-// });
+// get all users
+app.get("/users", async (req, res) => {
+    let users = await User.findAll();
+    res.send(users);
+});
+// get specific user by params
+app.get("/users/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    let user = await User.findOne({ where: { id } });
+    if (!user) return res.status(404).send("User not found");
+    res.send(user);
+});
 
-// // GET a single user by ID
-// app.get("/users/:id", (req, res) => {
-//     const id = parseInt(req.params.id);
-//     const user = users.find((user) => user.id === id);
-//     if (!user) {
-//         return res.status(404).send("User not found");
-//     }
-//     res.send(user);
-// });
+// update an existing user
+app.put("/users/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    const user = await User.findOne({ where: { id }})
+    if (!user) return res.status(404).send("User not found");
+    const { age, email } = req.body;
+    let updatedUser = await User.update({ age, email }, { where : { id } })
+    res.send(updatedUser);
+});
 
-// // POST a new user
-// app.post("/users", (req, res) => {
-//     const { name, email } = req.body;
-//     const id = users.length + 1;
-//     const newUser = { id, name, email };
-//     users.push(newUser);
-//     res.send(newUser);
-// });
-
-// // PUT an existing user
-// app.put("/users/:id", (req, res) => {
-//     const id = parseInt(req.params.id);
-//     const user = users.find((user) => user.id === id);
-//     if (!user) {
-//         return res.status(404).send("User not found");
-//     }
-//     const { name, email } = req.body;
-//     user.name = name;
-//     user.email = email;
-//     res.send(user);
-// });
-
-// // DELETE an existing user
-// app.delete("/users/:id", (req, res) => {
-//     const id = parseInt(req.params.id);
-//     const index = users.findIndex((user) => user.id === id);
-//     if (index === -1) {
-//         return res.status(404).send("User not found");
-//     }
-//     users.splice(index, 1);
-//     res.send("User deleted");
-// });
-// const port = 8080;
-// // Start server
-// app.listen(port, () => {
-//     console.log("Server started on port " + port);
-// });
+const port = 8080;
+// Start server
+app.listen(port, () => {
+    console.log("Server started on port " + port);
+});
