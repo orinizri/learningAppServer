@@ -60,7 +60,7 @@ app.use(express.json());
 
 // post new user 
 app.post("/newUser", async function (req, res) {
-    sampleDb.sync({ force: true }).then(async function () {
+    sampleDb.sync().then(async function () {
         let { username, password } = req.body;
         // Create demo: Create a User instance and save it to the database
         let newUser = await User.create({ username, password });
